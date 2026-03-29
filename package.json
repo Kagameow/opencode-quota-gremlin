@@ -1,0 +1,67 @@
+{
+  "name": "opencode-quota-gremlin",
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.24.0",
+  "description": "OpenCode quota sidebar gremlin for Anthropic, OpenAI, and GitHub Copilot.",
+  "license": "MIT",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "quota",
+    "sidebar",
+    "anthropic",
+    "openai",
+    "copilot"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.js"
+    }
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "oc-plugin": [
+    "server",
+    "tui"
+  ],
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "clean": "node -e \"const fs=require('node:fs'); fs.rmSync('dist',{recursive:true,force:true});\"",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.3.5",
+    "@opentui/core": ">=0.1.92",
+    "@opentui/solid": ">=0.1.92",
+    "solid-js": "^1.9.11"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^5.2.2",
+    "@opencode-ai/plugin": "^1.3.5",
+    "@opentui/core": "^0.1.92",
+    "@opentui/solid": "^0.1.92",
+    "@types/node": "^24.6.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-solid": "^0.14.5",
+    "solid-js": "^1.9.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
