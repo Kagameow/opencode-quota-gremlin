@@ -60,6 +60,23 @@ describe('buildSidebarProviderView', () => {
     assert.equal(view.windows[0]?.text, '568/300 mo · 0% · 2d 8h')
     assert.equal(view.windows[0]?.showProgressBar, false)
   })
+
+  it('keeps provider meta and shows compact Anthropic rate-limit errors', () => {
+    const provider: ProviderSnapshot = {
+      id: 'anthropic',
+      label: 'Claude',
+      accountLabel: 'OAuth',
+      windows: [],
+      error: 'Rate limited',
+      errorDetail: 'Rate limited. Please try again later.',
+    }
+
+    const view = buildSidebarProviderView(provider)
+
+    assert.equal(view.meta, 'OAuth')
+    assert.equal(view.error, 'Rate limited')
+    assert.equal(view.note, 'Rate limited. Please try again later.')
+  })
 })
 
 describe('sidebar view helpers', () => {

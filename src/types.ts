@@ -32,6 +32,7 @@ export interface ProviderSnapshot {
   windows: ProviderWindow[]
   note?: string
   error?: string
+  errorDetail?: string
 }
 
 export interface QuotaSnapshot {

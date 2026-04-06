@@ -16,7 +16,49 @@ interface AnthropicUsageResponse {
   }
 }
 
+interface AnthropicErrorResponse {
+  error?: {
+    type?: string
+    message?: string
+  }
+}
+
 const ANTHROPIC_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+
+function getAnthropicErrorMessage(status: number, body: string): { error: string, errorDetail?: string } {
+  try {
+    const parsed = JSON.parse(body) as AnthropicErrorResponse
+    const detail = parsed.error?.message?.trim()
+
+    if (status === 429) {
+      return {
+        error: 'Rate limited',
+        ...(detail ? { errorDetail: detail } : {}),
+      }
+    }
+
+    if (detail) {
+      return {
+        error: `Anthropic API request failed (${status})`,
+        errorDetail: detail,
+      }
+    }
+  } catch {
+    // ignore JSON parsing failures and fall back to plain text below
+  }
+
+  if (status === 429) {
+    return {
+      error: 'Rate limited',
+      errorDetail: 'Please try again later.',
+    }
+  }
+
+  return {
+    error: `Anthropic API request failed (${status})`,
+    ...(body.trim() ? { errorDetail: body.trim() } : {}),
+  }
+}
 
 export async function queryAnthropic(authData: OAuthAuthData | undefined): Promise<ProviderSnapshot | null> {
   if (!authData?.access || authData.type !== 'oauth')
@@ -42,8 +84,16 @@ export async function queryAnthropic(authData: OAuthAuthData | undefined): Promi
       },
     })
 
-    if (!response.ok)
-      throw new Error(`Anthropic API request failed (${response.status}): ${await response.text()}`)
+    if (!response.ok) {
+      const body = await response.text()
+      return {
+        id: 'anthropic',
+        label: 'Claude',
+        accountLabel: 'OAuth',
+        windows: [],
+        ...getAnthropicErrorMessage(response.status, body),
+      }
+    }
 
     const usage = await response.json() as AnthropicUsageResponse
     const windows = [
@@ -83,7 +133,7 @@ export async function queryAnthropic(authData: OAuthAuthData | undefined): Promi
     return {
       id: 'anthropic',
       label: 'Claude',
-      accountLabel: 'query failed',
+      accountLabel: 'OAuth',
       windows: [],
       error: error instanceof Error ? error.message : String(error),
     }

@@ -71,6 +71,7 @@ export function buildSidebarProviderView(provider: ProviderSnapshot): SidebarPro
     ...(provider.accountLabel ? { meta: provider.accountLabel } : {}),
     ...(provider.error ? { error: provider.error } : {}),
     windows: provider.windows.map(window => buildWindowView(provider, window)),
+    ...(provider.errorDetail ? { note: provider.errorDetail } : {}),
     ...(provider.note ? { note: provider.note } : {}),
   }
 }
