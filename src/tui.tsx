@@ -1,14 +1,84 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from '@opencode-ai/plugin/tui'
-import type { SidebarProviderView } from './types.js'
+import type { QuotaSnapshot, SidebarProviderView } from './types.js'
 
-import { For, Show, splitProps, untrack } from 'solid-js'
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 
-import { PLUGIN_ID, SIDEBAR_ORDER } from './constants.js'
-import { refreshQuotaSnapshot } from './quota.js'
-import { useQuotaSnapshot } from './tui/use-quota-snapshot.js'
+import { AUTO_REFRESH_MS, PLUGIN_ID, REFRESH_DEBOUNCE_MS, SIDEBAR_ORDER } from './constants.js'
+import { getQuotaSnapshot, refreshQuotaSnapshot } from './quota.js'
 import { createProgressBar } from './utils.js'
 import { buildSidebarFooterText, buildSidebarProviderViews } from './view/sidebar-model.js'
+
+function useQuotaSnapshot(api: TuiPluginApi, sessionID: () => string) {
+  const [snapshot, setSnapshot] = createSignal<QuotaSnapshot | undefined>(undefined)
+  const [loading, setLoading] = createSignal(true)
+  const [error, setError] = createSignal<string | undefined>(undefined)
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined
+
+  async function load(force: boolean) {
+    setLoading(true)
+    setError(undefined)
+    try {
+      const result = force
+        ? await refreshQuotaSnapshot()
+        : await getQuotaSnapshot()
+      setSnapshot(result)
+    }
+    catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+    finally {
+      setLoading(false)
+    }
+  }
+
+  function queueRefresh(force: boolean = false) {
+    if (debounceTimer)
+      clearTimeout(debounceTimer)
+    debounceTimer = setTimeout(() => void load(force), REFRESH_DEBOUNCE_MS)
+  }
+
+  onMount(() => {
+    void load(false)
+
+    const autoRefreshInterval = setInterval(() => queueRefresh(false), AUTO_REFRESH_MS)
+
+    const unsubscribers = [
+      api.event.on('session.updated', (event) => {
+        if (event.properties.info.id === sessionID())
+          queueRefresh(false)
+      }),
+      api.event.on('message.updated', (event) => {
+        if (event.properties.info.sessionID === sessionID())
+          queueRefresh(false)
+      }),
+      api.event.on('message.removed', (event) => {
+        if (event.properties.sessionID === sessionID())
+          queueRefresh(false)
+      }),
+      api.event.on('tui.session.select', (event) => {
+        if (event.properties.sessionID === sessionID())
+          queueRefresh(true)
+      }),
+    ]
+
+    onCleanup(() => {
+      if (debounceTimer)
+        clearTimeout(debounceTimer)
+      clearInterval(autoRefreshInterval)
+      for (const unsubscribe of unsubscribers)
+        unsubscribe()
+    })
+  })
+
+  return {
+    snapshot,
+    loading,
+    error,
+    refresh: () => queueRefresh(true),
+  }
+}
 
 function getTone(api: TuiPluginApi, tone: 'default' | 'success' | 'warning' | 'error' | 'muted') {
   if (tone === 'success')
@@ -66,31 +136,52 @@ function ProviderCard(props: { api: TuiPluginApi, provider: SidebarProviderView 
 }
 
 function SidebarView(props: { api: TuiPluginApi, sessionID: string }) {
-  const [local] = splitProps(props, ['api', 'sessionID'])
-  const api = untrack(() => local.api)
-  const quota = useQuotaSnapshot(api, () => local.sessionID)
-  const theme = () => api.theme.current
-  const providerViews = () => buildSidebarProviderViews(quota.snapshot())
-  const footerText = () => buildSidebarFooterText(quota.snapshot())
+  const quota = useQuotaSnapshot(props.api, () => props.sessionID)
+  const theme = () => props.api.theme.current
+  const snapshot = () => quota.snapshot()
+  const providerViews = () => buildSidebarProviderViews(snapshot())
+  const footerText = () => buildSidebarFooterText(snapshot())
+  const errorText = () => quota.error()
+  const isLoading = () => quota.loading() && !snapshot()
+  const hasProviders = () => providerViews().length > 0
 
   return (
     <box flexDirection="column">
-      <Show when={providerViews().length} fallback={<text fg={theme().textMuted}>No supported accounts found.</text>}>
-        <For each={providerViews()}>
-          {provider => <ProviderCard api={api} provider={provider} />}
-        </For>
+      <Show
+        when={errorText()}
+        fallback={(
+          <Show
+            when={isLoading()}
+            fallback={(
+              <Show
+                when={hasProviders()}
+                fallback={<text fg={theme().textMuted}>No supported accounts found.</text>}
+              >
+                <For each={providerViews()}>
+                  {provider => <ProviderCard api={props.api} provider={provider} />}
+                </For>
+              </Show>
+            )}
+          >
+            <text fg={theme().textMuted}>Refreshing...</text>
+          </Show>
+        )}
+      >
+        <text fg={theme().error}>{errorText()}</text>
       </Show>
 
       <box paddingTop={1}>
         <Show
-          when={quota.snapshot.loading}
+          when={isLoading()}
           fallback={(
             <Show when={footerText()}>
               <text fg={theme().textMuted}>{footerText()}</text>
             </Show>
           )}
         >
-          <text fg={theme().textMuted}>Refreshing...</text>
+          <Show when={snapshot()}>
+            <text fg={theme().textMuted}>Refreshing...</text>
+          </Show>
         </Show>
       </box>
     </box>
