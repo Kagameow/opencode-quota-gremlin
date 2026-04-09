@@ -24,11 +24,9 @@ function useQuotaSnapshot(api: TuiPluginApi, sessionID: () => string) {
         ? await refreshQuotaSnapshot()
         : await getQuotaSnapshot()
       setSnapshot(result)
-    }
-    catch (err) {
+    } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
-    }
-    finally {
+    } finally {
       setLoading(false)
     }
   }
